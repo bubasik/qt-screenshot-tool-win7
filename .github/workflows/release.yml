@@ -1,52 +1,109 @@
-name: 🚀 Автоматический релиз
+name: Build Qt Screenshot Tool (64-bit)
 
 on:
   push:
-    tags:
-      - 'v*'  # Триггер при создании тега вида v1.0.0, v2.1.3 и т.д.
-
-permissions:
-  contents: write  # Разрешение на создание релизов
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
 
 jobs:
-  build-and-release:
+  build-win64:
     runs-on: windows-2022
-    
-    strategy:
-      matrix:
-        arch: [x86, x64]
-    
+
     steps:
-      - name: 📥 Checkout кода
+      - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: ⚙️ Установка Python
-        uses: actions/setup-python@v5
+      - name: ⚙️ Setup Qt 5.12.12 (64-bit, MinGW)
+        uses: jurplel/install-qt-action@v4
         with:
-          python-version: '3.11'
+          version: '5.12.12'
+          arch: 'win64_mingw73'
+          cache: true
+          cache-key-prefix: qt-win64-mingw73-5.12.12
+          set-env: true
 
-      - name: 📦 Установка Qt 5.12.12 + MinGW
+      - name: 🔍 Verify toolchain
+        shell: pwsh
         run: |
-          pip install aqtinstall==3.1.13
-          aqt install-qt windows desktop 5.12.12 win${{ matrix.arch }} -m mingw73
-        env:
-          AQT_USE_CACHE: "1"
+          Write-Host "=== Qt version ==="
+          qmake --version
+          
+          Write-Host "`n=== Compiler architecture ==="
+          $arch = g++ -dumpmachine 2>&1
+          Write-Host "Architecture: $arch"
+          if ($arch -notlike "*x86_64*") {
+            Write-Error "❌ Not 64-bit compiler!"
+            exit 1
+          }
+          Write-Host "✅ 64-bit confirmed"
 
-      - name: 🔧 Настройка PATH для MinGW
-        run: |
-          $qtDir = "C:\Qt\5.12.12\mingw73_${{ matrix.arch }}"
-          $mingwBin = "$qtDir\bin;$qtDir\..\Tools\mingw730_${{ matrix.arch }}\bin"
-          echo "$mingwBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - name: 🛠️ Сборка проекта
+      - name: 🛠️ Build project (Release)
         run: |
           qmake ScreenshotTool.pro "CONFIG+=release"
           mingw32-make -j4
+        shell: cmd
 
-      - name: 📦 Деплой зависимостей
+      - name: 🔍 Debug locate executable
         run: |
-          windeployqt --release --qmldir . release\ScreenshotTool.exe
-        working-directory: release
+          echo === Searching for .exe files ===
+          dir /s /b *.exe
+          echo.
+          echo === Current directory structure ===
+          dir
+        shell: cmd
+
+      - name: 📦 Deploy Qt dependencies (auto-detect .exe)
+        shell: pwsh
+        run: |
+          # Ищем .exe в текущей директории и подпапках
+          $exePath = Get-ChildItem -Path . -Filter "*.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          
+          if (-not $exePath) {
+            Write-Error "❌ No .exe file found after build!"
+            exit 1
+          }
+          
+          Write-Host "✅ Found executable: $exePath"
+          Write-Host "Running windeployqt..."
+          
+          windeployqt --release "$exePath"
+          
+          # Копируем .exe в отдельную папку для архивации
+          $deployDir = "deploy"
+          New-Item -ItemType Directory -Path $deployDir -Force | Out-Null
+          Copy-Item -Path "$exePath" -Destination $deployDir -Force
+          
+          # Копируем все зависимости (dll, plugins)
+          $exeDir = Split-Path $exePath -Parent
+          Copy-Item -Path "$exeDir\*.dll" -Destination $deployDir -ErrorAction SilentlyContinue
+          Copy-Item -Path "$exeDir\platforms" -Destination $deployDir -Recurse -ErrorAction SilentlyContinue
+          Copy-Item -Path "$exeDir\imageformats" -Destination $deployDir -Recurse -ErrorAction SilentlyContinue
+          
+          Write-Host "✅ Deployment completed in $deployDir"
+
+      - name: 💾 Package for Windows
+        run: |
+          Compress-Archive -Path deploy\* -DestinationPath ScreenshotTool-win64-qt5.12.12.zip -Force
+        shell: pwsh
+
+      - name: 🚀 Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScreenshotTool-win64-qt5.12.12
+          path: ScreenshotTool-win64-qt5.12.12.zip
+          retention-days: 30
+
+      - name: ✅ Success message
+        if: success()
+        run: |
+          echo.
+          echo ========================================
+          echo  ✅ BUILD SUCCESSFUL!
+          echo  📦 Artifact: ScreenshotTool-win64-qt5.12.12.zip
+          echo  💻 Works on Windows 7+ (64-bit)
+          echo ========================================
+        shell: cmd
 
       - name: 💾 Упаковка артефактов
         run: |

@@ -7,6 +7,9 @@
 #include <QPixmap>
 #include <QTimer>
 
+class RegionSelector;
+class QPushButton;
+
 class ScreenshotTool : public QMainWindow
 {
     Q_OBJECT
@@ -16,7 +19,10 @@ public:
     ~ScreenshotTool() override;
 
 private slots:
-    void onNewScreenshot();
+    void onFullScreenshot();
+    void onRegionScreenshot();
+    void onRegionSelected(const QPixmap &pixmap);
+    void onRegionCancelled();
     void onSave();
     void onCopy();
     void onThemeChanged(int index);
@@ -24,11 +30,15 @@ private slots:
 private:
     void setupUI();
     void applyTheme(const QString &theme);
-    QPixmap captureScreen();
+    void setPreviewPixmap(const QPixmap &pixmap);
+    QPixmap captureFullScreen();
 
     QLabel *previewLabel;
     QComboBox *themeComboBox;
+    QPushButton *regionButton;
+    QPushButton *fullButton;
     QPixmap currentScreenshot;
+    RegionSelector *regionSelector;
 };
 
 #endif // SCREENSHOTTOOL_H

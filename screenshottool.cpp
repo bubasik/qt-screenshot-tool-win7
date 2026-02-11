@@ -12,12 +12,11 @@
 #include <QMessageBox>
 #include <QDateTime>
 #include <QShortcut>
-#include <QKeyEvent>  // ← КРИТИЧЕСКИ ВАЖНО: добавлен для использования event->key()
+#include <QFile>  // Для определения размера файла
 
 ScreenshotTool::ScreenshotTool(QWidget *parent)
     : QMainWindow(parent),
-      regionSelector(nullptr),
-      isPreviewFullScreen(false)
+      regionSelector(nullptr)
 {
     setupUI();
     setupShortcuts();
@@ -230,9 +229,10 @@ void ScreenshotTool::onSave()
 
     if (!path.isEmpty()) {
         if (currentScreenshot.save(path)) {
+            qint64 sizeKb = QFile(path).size() / 1024;
             statusBar()->showMessage(QString("Сохранено: %1 • Размер: %2 КБ")
                 .arg(path)
-                .arg(QFile(path).size() / 1024), 3000);
+                .arg(sizeKb), 3000);
         } else {
             QMessageBox::critical(this, "Ошибка", "Не удалось сохранить файл");
         }
@@ -249,9 +249,4 @@ void ScreenshotTool::onCopy()
     QClipboard *clipboard = QApplication::clipboard();
     clipboard->setPixmap(currentScreenshot);
     statusBar()->showMessage("Скриншот скопирован в буфер обмена • Ctrl+V для вставки", 3000);
-}
-
-void ScreenshotTool::keyPressEvent(QKeyEvent *event)
-{
-    QMainWindow::keyPressEvent(event);
 }

@@ -110,10 +110,8 @@ jobs:
 
       - name: 💾 Упаковка артефактов
         run: |
-          $arch = "${{ matrix.arch }}"
-          $zipName = "ScreenshotTool-win${arch}-qt5.12.12.zip"
-          Compress-Archive -Path "deploy\*" -DestinationPath "..\$zipName"
-          echo "ARTIFACT_PATH=../$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Compress-Archive -Path "deploy\*" -DestinationPath "ScreenshotTool-win64-qt5.12.12.zip"
+          echo "ARTIFACT_PATH=ScreenshotTool-win64-qt5.12.12.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
         working-directory: release
 
       - name: 🚀 Создание релиза на GitHub

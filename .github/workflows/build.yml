@@ -1,65 +1,60 @@
-name: Build Qt Screenshot Tool
+name: Build Qt Screenshot Tool (aqt)
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
   workflow_dispatch:
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-2022
     
     strategy:
       matrix:
-        # Qt 5.12.12 доступен только с компилятором MinGW 7.3
-        qt_arch: [ win64_mingw73, win32_mingw73 ]
+        arch: [ win64_mingw73, win32_mingw73 ]
     
     steps:
-      - name: 📥 Checkout code
+      - name: 📥 Checkout
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Qt 5.12.12
-        uses: jurplel/install-qt-action@v4
+      - name: ⚙️ Setup Python
+        uses: actions/setup-python@v5
         with:
-          version: '5.12.12'
-          arch: ${{ matrix.qt_arch }}
-          modules: 'qttools'  # Для windeployqt
-          cache: true
-          cache-key-prefix: qt-${{ matrix.qt_arch }}
+          python-version: '3.11'
 
-      - name: Debug Проверка установки
+      - name: 📦 Install Qt 5.12.12 via aqt
         run: |
-          echo "Qt dir: $Env:Qt5_Dir"
-          qmake --version
-          windeployqt --version
+          pip install aqtinstall==3.1.13
+          aqt install-qt windows desktop 5.12.12 ${{ matrix.arch }} -O C:\Qt
+        shell: pwsh
 
-      - name: 🛠️ Build project
+      - name: 🔧 Add Qt to PATH
+        run: |
+          $qtVer = "5.12.12"
+          $arch = "${{ matrix.arch }}"
+          $qtPath = "C:\Qt\$qtVer\$arch\bin"
+          echo "$qtPath" | Out-File -FilePath $env:GITHUB_PATH -Append
+          echo "Qt path: $qtPath"
+        shell: pwsh
+
+      - name: 🛠️ Build
         run: |
           qmake ScreenshotTool.pro "CONFIG+=release"
           mingw32-make -j4
         shell: cmd
 
-      - name: 📦 Deploy dependencies
+      - name: 📦 Deploy
         run: |
-          windeployqt --release --qmldir . release\ScreenshotTool.exe
+          windeployqt --release release\ScreenshotTool.exe
         working-directory: release
         shell: cmd
 
-      - name: 💾 Package artifacts
+      - name: 💾 Package
         run: |
-          $arch = "${{ matrix.qt_arch }}"
-          # Извлекаем битность из архитектуры (win64_mingw73 → win64)
-          $bits = if ($arch -like "win64*") { "win64" } else { "win32" }
-          $zipName = "ScreenshotTool-${bits}-qt5.12.12.zip"
-          Compress-Archive -Path "release\*" -DestinationPath "..\$zipName"
-          echo "ARTIFACT_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append
-        working-directory: release
+          $bits = if ("${{ matrix.arch }}" -like "win64*") { "win64" } else { "win32" }
+          Compress-Archive -Path "release\*" -DestinationPath "ScreenshotTool-${bits}-qt5.12.12.zip"
         shell: pwsh
 
-      - name: 🚀 Upload artifacts
+      - name: 🚀 Upload
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ARTIFACT_NAME }}
-          path: ${{ env.ARTIFACT_NAME }}
-          retention-days: 30
+          name: ScreenshotTool-${{ matrix.arch }}
+          path: ScreenshotTool-*.zip

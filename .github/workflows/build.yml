@@ -4,65 +4,62 @@ on:
   push:
     branches: [ main ]
   pull_request:
-  workflow_dispatch:  # Запуск вручную из GitHub UI
+  workflow_dispatch:
 
 jobs:
   build-windows:
-    runs-on: windows-2022  # Современный образ, но соберём бинарники для Win7
+    runs-on: windows-2022
     
     strategy:
       matrix:
-        arch: [x86, x64]  # Собираем обе архитектуры для максимальной совместимости
+        # Qt 5.12.12 доступен только с компилятором MinGW 7.3
+        qt_arch: [ win64_mingw73, win32_mingw73 ]
     
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Python (для aqtinstall)
-        uses: actions/setup-python@v5
+      - name: ⚙️ Setup Qt 5.12.12
+        uses: jurplel/install-qt-action@v4
         with:
-          python-version: '3.11'
+          version: '5.12.12'
+          arch: ${{ matrix.qt_arch }}
+          modules: 'qttools'  # Для windeployqt
+          cache: true
+          cache-key-prefix: qt-${{ matrix.qt_arch }}
 
-      - name: 📦 Install Qt 5.12.12 + MinGW
+      - name: 🔍 Debug: Проверка установки
         run: |
-          pip install aqtinstall==3.1.13
-          # Устанавливаем именно ту версию MinGW, что совместима с Win7
-          aqt install-qt windows desktop 5.12.12 win${{ matrix.arch }} -m mingw73
-        env:
-          AQT_USE_CACHE: "1"  # Ускоряет повторные сборки
-
-      - name: 🔧 Setup MinGW in PATH
-        run: |
-          $qtDir = "C:\Qt\5.12.12\mingw73_${{ matrix.arch }}"
-          $mingwBin = "$qtDir\bin;$qtDir\..\Tools\mingw730_${{ matrix.arch }}\bin"
-          echo "$mingwBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          echo "Qt installed to: $qtDir"
+          echo "Qt dir: $Env:Qt5_Dir"
+          qmake --version
+          windeployqt --version
 
       - name: 🛠️ Build project
         run: |
           qmake ScreenshotTool.pro "CONFIG+=release"
           mingw32-make -j4
+        shell: cmd
 
-      - name: 📦 Deploy dependencies (windeployqt)
+      - name: 📦 Deploy dependencies
         run: |
           windeployqt --release --qmldir . release\ScreenshotTool.exe
         working-directory: release
+        shell: cmd
 
       - name: 💾 Package artifacts
         run: |
-          $arch = "${{ matrix.arch }}"
-          $zipName = "ScreenshotTool-win${arch}-qt5.12.12.zip"
-          Compress-Archive -Path "release\*" -DestinationPath $zipName
+          $arch = "${{ matrix.qt_arch }}"
+          # Извлекаем битность из архитектуры (win64_mingw73 → win64)
+          $bits = if ($arch -like "win64*") { "win64" } else { "win32" }
+          $zipName = "ScreenshotTool-${bits}-qt5.12.12.zip"
+          Compress-Archive -Path "release\*" -DestinationPath "..\$zipName"
           echo "ARTIFACT_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append
+        working-directory: release
+        shell: pwsh
 
-      - name: 🚀 Upload to GitHub Artifacts
+      - name: 🚀 Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: ${{ env.ARTIFACT_NAME }}
           retention-days: 30
-
-  # Опционально: сборка под Linux/macOS для кроссплатформенности
-  # build-linux:
-  #   runs-on: ubuntu-22.04
-  #   steps: ... (аналогично с установкой Qt через aqt)

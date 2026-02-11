@@ -23,7 +23,7 @@ jobs:
           cache-key-prefix: qt-win32-mingw73-5.12.12
           set-env: true  # ← КРИТИЧЕСКИ ВАЖНО: настраивает окружение
 
-      - name: 🔧 Fix PATH: prioritize 32-bit toolchain (PowerShell)
+      - name:  PATH prioritize 32 bit toolchain
         shell: pwsh
         run: |
           # Правильные пути для Qt 5.12.12 win32_mingw73

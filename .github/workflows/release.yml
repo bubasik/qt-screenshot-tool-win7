@@ -85,10 +85,12 @@ jobs:
           
           Write-Host "✅ Deployment completed in $deployDir"
 
-      - name: 💾 Package for Windows
+      - name: 💾 Упаковка артефактов
         run: |
           Compress-Archive -Path deploy\* -DestinationPath ScreenshotTool-win64-qt5.12.12.zip -Force
+          echo "ARTIFACT_PATH=ScreenshotTool-win64-qt5.12.12.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
         shell: pwsh
+        working-directory: release
 
       - name: 🚀 Upload artifact
         uses: actions/upload-artifact@v4
@@ -107,12 +109,6 @@ jobs:
           echo  💻 Works on Windows 7+ (64-bit)
           echo ========================================
         shell: cmd
-
-      - name: 💾 Упаковка артефактов
-        run: |
-          Compress-Archive -Path "deploy\*" -DestinationPath "ScreenshotTool-win64-qt5.12.12.zip"
-          echo "ARTIFACT_PATH=ScreenshotTool-win64-qt5.12.12.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
-        working-directory: release
 
       - name: 🚀 Создание релиза на GitHub
         uses: softprops/action-gh-release@v2

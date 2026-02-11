@@ -28,7 +28,7 @@ jobs:
           cache: true
           cache-key-prefix: qt-${{ matrix.qt_arch }}
 
-      - name: 🔍 Debug: Проверка установки
+      - name: Debug Проверка установки
         run: |
           echo "Qt dir: $Env:Qt5_Dir"
           qmake --version

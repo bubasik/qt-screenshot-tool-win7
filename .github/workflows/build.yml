@@ -1,18 +1,27 @@
-name: Build Qt Screenshot Tool (aqt)
+name: Build Qt Screenshot Tool
 
 on:
+  push:
+    branches: [ main ]
+  pull_request:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-2022
     
     strategy:
       matrix:
-        arch: [ win64_mingw73, win32_mingw73 ]
+        arch: 
+          - name: win64
+            qt_arch: win64_mingw73
+            mingw_dir: mingw730_64
+          - name: win32
+            qt_arch: win32_mingw73
+            mingw_dir: mingw730_32
     
     steps:
-      - name: 📥 Checkout
+      - name: 📥 Checkout code
         uses: actions/checkout@v4
 
       - name: ⚙️ Setup Python
@@ -20,41 +29,69 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 📦 Install Qt 5.12.12 via aqt
+      - name: 📦 Install Qt 5.12.12 via aqtinstall
         run: |
           pip install aqtinstall==3.1.13
-          aqt install-qt windows desktop 5.12.12 ${{ matrix.arch }} -O C:\Qt
+          aqt install-qt windows desktop 5.12.12 ${{ matrix.arch.qt_arch }} -O C:\Qt
+          aqt install-tool windows desktop tools_mingw730 -O C:\Qt
         shell: pwsh
 
-      - name: 🔧 Add Qt to PATH
+      - name: 🔧 Add Qt and MinGW to PATH
         run: |
+          # Пути к Qt и компилятору
           $qtVer = "5.12.12"
-          $arch = "${{ matrix.arch }}"
-          $qtPath = "C:\Qt\$qtVer\$arch\bin"
-          echo "$qtPath" | Out-File -FilePath $env:GITHUB_PATH -Append
-          echo "Qt path: $qtPath"
+          $qtArch = "${{ matrix.arch.qt_arch }}"
+          $mingwDir = "${{ matrix.arch.mingw_dir }}"
+          
+          $qtBinPath = "C:\Qt\$qtVer\$qtArch\bin"
+          $mingwBinPath = "C:\Qt\Tools\$mingwDir\bin"
+          
+          # Добавляем в PATH для текущей сессии
+          $env:Path = "$qtBinPath;$mingwBinPath;" + $env:Path
+          
+          # Сохраняем для последующих шагов через $env:GITHUB_PATH
+          echo "$qtBinPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "$mingwBinPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          
+          # Отладка: проверяем что всё на месте
+          Write-Host "Qt bin path: $qtBinPath"
+          Write-Host "MinGW bin path: $mingwBinPath"
+          Get-ChildItem -Path $qtBinPath -Filter qmake.exe -ErrorAction SilentlyContinue
+          Get-ChildItem -Path $mingwBinPath -Filter mingw32-make.exe -ErrorAction SilentlyContinue
         shell: pwsh
 
-      - name: 🛠️ Build
+      - name: 🔍 Verify installation
+        run: |
+          qmake --version
+          mingw32-make -v
+          where qmake
+          where mingw32-make
+        shell: cmd
+
+      - name: 🛠️ Build project
         run: |
           qmake ScreenshotTool.pro "CONFIG+=release"
           mingw32-make -j4
         shell: cmd
 
-      - name: 📦 Deploy
+      - name: 📦 Deploy dependencies
         run: |
-          windeployqt --release release\ScreenshotTool.exe
+          windeployqt --release --qmldir . release\ScreenshotTool.exe
         working-directory: release
         shell: cmd
 
-      - name: 💾 Package
+      - name: 💾 Package artifacts
         run: |
-          $bits = if ("${{ matrix.arch }}" -like "win64*") { "win64" } else { "win32" }
-          Compress-Archive -Path "release\*" -DestinationPath "ScreenshotTool-${bits}-qt5.12.12.zip"
+          $archName = "${{ matrix.arch.name }}"
+          $zipName = "ScreenshotTool-${archName}-qt5.12.12.zip"
+          Compress-Archive -Path "release\*" -DestinationPath "..\$zipName"
+          echo "ARTIFACT_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append
+        working-directory: release
         shell: pwsh
 
-      - name: 🚀 Upload
+      - name: 🚀 Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ScreenshotTool-${{ matrix.arch }}
-          path: ScreenshotTool-*.zip
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_NAME }}
+          retention-days: 30

@@ -9,108 +9,70 @@ on:
 jobs:
   build-win32:
     runs-on: windows-2022
-    defaults:
-      run:
-        shell: cmd
 
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Qt 5.12.12 (32-bit) with isolated env
+      - name: ⚙️ Setup Qt 5.12.12 (32-bit)
         uses: jurplel/install-qt-action@v4
         with:
           version: '5.12.12'
           arch: 'win32_mingw73'
           cache: true
           cache-key-prefix: qt-win32-mingw73-5.12.12
-          set-env: true  # ← КРИТИЧЕСКИ ВАЖНО: изолирует окружение
+          set-env: true  # ← КРИТИЧЕСКИ ВАЖНО: настраивает окружение
 
-      - name: 🔧 Purge 64-bit MinGW from PATH (critical fix)
+      - name: 🔧 Fix PATH: prioritize 32-bit toolchain (PowerShell)
+        shell: pwsh
         run: |
-          @echo off
-          echo Original PATH:
-          echo %PATH%
-          echo.
+          # Правильные пути для Qt 5.12.12 win32_mingw73
+          $qtBin = "C:\Qt\5.12.12\mingw73_32\bin"
+          $mingwBin = "C:\Qt\Tools\mingw730_32\bin"
           
-          rem Удаляем ВСЕ 64-битные компиляторы из PATH
-          set "NEW_PATH="
-          for %%i in (%PATH:;= %) do (
-            echo Checking: %%i | findstr /i /v "mingw64 x86_64 64-bit" >nul && (
-              if defined NEW_PATH (
-                set "NEW_PATH=!NEW_PATH!;%%i"
-              ) else (
-                set "NEW_PATH=%%i"
-              )
-            )
-          )
+          # Добавляем пути В НАЧАЛО %GITHUB_PATH% (гарантирует приоритет)
+          "$qtBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "$mingwBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           
-          echo.
-          echo Cleaned PATH (without 64-bit compilers):
-          echo !NEW_PATH!
-          echo.
-          
-          rem Добавляем 32-битный тулчейн из Qt В НАЧАЛО
-          set "QT_BIN=C:\Qt\5.12.12\mingw73_32\bin"
-          set "MINGW_BIN=C:\Qt\Tools\mingw730_32\bin"
-          
-          set "PATH=%QT_BIN%;%MINGW_BIN%;!NEW_PATH!"
-          echo %PATH% > %GITHUB_PATH%
-          
-          echo.
-          echo Final PATH configured for 32-bit compilation
+          Write-Host "✅ Added to PATH (priority order):"
+          Write-Host "   1. $qtBin"
+          Write-Host "   2. $mingwBin"
 
-      - name: 🔍 Verify 32-bit toolchain (MUST show i686)
+      - name: 🔍 Verify 32-bit toolchain
+        shell: pwsh
         run: |
-          @echo off
-          echo === Checking qmake ===
-          where qmake
-          qmake --version
-          echo.
+          Write-Host "=== Checking qmake ==="
+          Get-Command qmake -ErrorAction Stop | Select-Object Name, Source
           
-          echo === Checking g++ ===
-          where g++
-          g++ --version
-          echo.
+          Write-Host "`n=== Checking g++ ==="
+          Get-Command g++ -ErrorAction Stop | Select-Object Name, Source
           
-          echo === Checking architecture (MUST be i686) ===
-          g++ -dumpmachine
-          echo.
+          Write-Host "`n=== Checking architecture (MUST be i686) ==="
+          $arch = g++ -dumpmachine 2>&1
+          Write-Host "Architecture: $arch"
           
-          echo === Checking PATH ===
-          path
-          echo.
-          
-          rem Критическая проверка: если видим x86_64 — останавливаем сборку
-          g++ -dumpmachine | findstr /i "x86_64" && (
-            echo ERROR: 64-bit compiler detected! Aborting build.
-            exit /b 1
-          ) || (
-            echo OK: 32-bit toolchain confirmed (i686)
-          )
+          if ($arch -like "*x86_64*") {
+            Write-Error "❌ FATAL: 64-bit compiler detected! Aborting build."
+            exit 1
+          }
+          Write-Host "✅ OK: 32-bit toolchain confirmed (i686)"
 
-      - name: 🛠️ Build project (Release) — ignoring Qt warnings
+      - name: 🛠️ Build project (Release)
         run: |
-          @echo off
-          echo Building with qmake...
-          qmake ScreenshotTool.pro "CONFIG+=release" "QMAKE_CXXFLAGS+=-Wno-deprecated-copy"
-          
-          echo.
-          echo Compiling with mingw32-make...
+          qmake ScreenshotTool.pro "CONFIG+=release"
           mingw32-make -j4
-          
-          echo.
-          echo Build completed successfully!
+        shell: cmd
 
       - name: 📦 Deploy Qt dependencies
         run: |
           windeployqt --release release\ScreenshotTool.exe
         working-directory: release
+        shell: cmd
 
       - name: 💾 Package for Windows 7
         run: |
-          powershell -Command "Compress-Archive -Path 'release\*' -DestinationPath 'ScreenshotTool-win32-qt5.12.12.zip' -Force"
-        working-directory: .
+          Compress-Archive -Path release\* -DestinationPath ScreenshotTool-win32-qt5.12.12.zip -Force
+        shell: pwsh
 
       - name: 🚀 Upload artifact
         uses: actions/upload-artifact@v4
@@ -127,5 +89,5 @@ jobs:
           echo  ✅ BUILD SUCCESSFUL!
           echo  📦 Artifact: ScreenshotTool-win32-qt5.12.12.zip
           echo  💻 Works on Windows 7 SP1 (32/64-bit)
-          echo  ⚠️  Qt 5.12.12 warnings are SAFE to ignore
           echo ========================================
+        shell: cmd

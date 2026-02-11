@@ -22,15 +22,19 @@ jobs:
         with:
           version: '5.12.12'
           arch: 'win32_mingw73'
-          modules: 'qttools'  # Required for windeployqt
           cache: true
-          cache-key-prefix: qt-win32-mingw73
+          cache-key-prefix: qt-win32-mingw73-5.12.12
 
       - name: 🔍 Verify Qt installation
         run: |
+          echo Checking qmake...
           qmake --version
-          where qmake
-          where windeployqt
+          echo.
+          echo Checking windeployqt...
+          windeployqt --version
+          echo.
+          echo PATH contents:
+          path
 
       - name: 🛠️ Build project (Release)
         run: |
@@ -44,7 +48,7 @@ jobs:
 
       - name: 💾 Package for Windows 7
         run: |
-          powershell -Command "Compress-Archive -Path 'release\*' -DestinationPath 'ScreenshotTool-win32-qt5.12.12.zip'"
+          powershell -Command "Compress-Archive -Path 'release\*' -DestinationPath 'ScreenshotTool-win32-qt5.12.12.zip' -Force"
         working-directory: .
 
       - name: 🚀 Upload artifact
@@ -59,7 +63,7 @@ jobs:
         run: |
           echo.
           echo ========================================
-          echo  ✅ Сборка УСПЕШНА!
-          echo  📦 Артефакт: ScreenshotTool-win32-qt5.12.12.zip
-          echo  💻 Работает на Windows 7 SP1+
+          echo  ✅ BUILD SUCCESSFUL!
+          echo  📦 Artifact: ScreenshotTool-win32-qt5.12.12.zip
+          echo  💻 Works on Windows 7 SP1 (32/64-bit)
           echo ========================================

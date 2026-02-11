@@ -1,0 +1,1 @@
+# qt-screenshot-tool-win7

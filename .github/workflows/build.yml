@@ -1,4 +1,4 @@
-name: Build Qt Screenshot Tool for Windows 7
+name: Build Qt Screenshot Tool (64-bit)
 
 on:
   push:
@@ -7,38 +7,23 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-win32:
+  build-win64:
     runs-on: windows-2022
 
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Qt 5.12.12 (32-bit)
+      - name: ⚙️ Setup Qt 5.12.12 (64-bit, MinGW)
         uses: jurplel/install-qt-action@v4
         with:
           version: '5.12.12'
-          arch: 'win32_mingw73'
+          arch: 'win64_mingw73'  # ← 64-битная архитектура
           cache: true
-          cache-key-prefix: qt-win32-mingw73-5.12.12
-          set-env: true  # ← КРИТИЧЕСКИ ВАЖНО: настраивает окружение
+          cache-key-prefix: qt-win64-mingw73-5.12.12
+          set-env: true  # Автоматически настраивает PATH
 
-      - name:  PATH prioritize 32 bit toolchain
-        shell: pwsh
-        run: |
-          # Правильные пути для Qt 5.12.12 win32_mingw73
-          $qtBin = "C:\Qt\5.12.12\mingw73_32\bin"
-          $mingwBin = "C:\Qt\Tools\mingw730_32\bin"
-          
-          # Добавляем пути В НАЧАЛО %GITHUB_PATH% (гарантирует приоритет)
-          "$qtBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          "$mingwBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          
-          Write-Host "✅ Added to PATH (priority order):"
-          Write-Host "   1. $qtBin"
-          Write-Host "   2. $mingwBin"
-
-      - name: 🔍 Verify 32-bit toolchain
+      - name: 🔍 Verify 64-bit toolchain
         shell: pwsh
         run: |
           Write-Host "=== Checking qmake ==="
@@ -47,15 +32,15 @@ jobs:
           Write-Host "`n=== Checking g++ ==="
           Get-Command g++ -ErrorAction Stop | Select-Object Name, Source
           
-          Write-Host "`n=== Checking architecture (MUST be i686) ==="
+          Write-Host "`n=== Checking architecture (MUST be x86_64) ==="
           $arch = g++ -dumpmachine 2>&1
           Write-Host "Architecture: $arch"
           
-          if ($arch -like "*x86_64*") {
-            Write-Error "❌ FATAL: 64-bit compiler detected! Aborting build."
+          if ($arch -notlike "*x86_64*") {
+            Write-Error "❌ FATAL: Not a 64-bit compiler! Aborting build."
             exit 1
           }
-          Write-Host "✅ OK: 32-bit toolchain confirmed (i686)"
+          Write-Host "✅ OK: 64-bit toolchain confirmed"
 
       - name: 🛠️ Build project (Release)
         run: |
@@ -69,16 +54,16 @@ jobs:
         working-directory: release
         shell: cmd
 
-      - name: 💾 Package for Windows 7
+      - name: 💾 Package for Windows
         run: |
-          Compress-Archive -Path release\* -DestinationPath ScreenshotTool-win32-qt5.12.12.zip -Force
+          Compress-Archive -Path release\* -DestinationPath ScreenshotTool-win64-qt5.12.12.zip -Force
         shell: pwsh
 
       - name: 🚀 Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ScreenshotTool-win32-qt5.12.12
-          path: ScreenshotTool-win32-qt5.12.12.zip
+          name: ScreenshotTool-win64-qt5.12.12
+          path: ScreenshotTool-win64-qt5.12.12.zip
           retention-days: 30
 
       - name: ✅ Success message
@@ -87,7 +72,7 @@ jobs:
           echo.
           echo ========================================
           echo  ✅ BUILD SUCCESSFUL!
-          echo  📦 Artifact: ScreenshotTool-win32-qt5.12.12.zip
-          echo  💻 Works on Windows 7 SP1 (32/64-bit)
+          echo  📦 Artifact: ScreenshotTool-win64-qt5.12.12.zip
+          echo  💻 Works on Windows 7+ (64-bit only)
           echo ========================================
         shell: cmd

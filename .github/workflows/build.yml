@@ -44,7 +44,7 @@ jobs:
           mingw32-make -j4
         shell: cmd
 
-      - name: 🔍 Debug: Locate executable
+      - name: 🔍 Debug locate executable
         run: |
           echo === Searching for .exe files ===
           dir /s /b *.exe

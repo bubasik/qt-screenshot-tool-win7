@@ -90,7 +90,6 @@ jobs:
           Compress-Archive -Path deploy\* -DestinationPath ScreenshotTool-win64-qt5.12.12.zip -Force
           echo "ARTIFACT_PATH=ScreenshotTool-win64-qt5.12.12.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
         shell: pwsh
-        working-directory: deploy
 
       - name: 🚀 Upload artifact
         uses: actions/upload-artifact@v4

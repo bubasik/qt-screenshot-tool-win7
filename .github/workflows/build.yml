@@ -18,29 +18,25 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: '5.12.12'
-          arch: 'win64_mingw73'  # ← 64-битная архитектура
+          arch: 'win64_mingw73'
           cache: true
           cache-key-prefix: qt-win64-mingw73-5.12.12
-          set-env: true  # Автоматически настраивает PATH
+          set-env: true
 
-      - name: 🔍 Verify 64-bit toolchain
+      - name: 🔍 Verify toolchain
         shell: pwsh
         run: |
-          Write-Host "=== Checking qmake ==="
-          Get-Command qmake -ErrorAction Stop | Select-Object Name, Source
+          Write-Host "=== Qt version ==="
+          qmake --version
           
-          Write-Host "`n=== Checking g++ ==="
-          Get-Command g++ -ErrorAction Stop | Select-Object Name, Source
-          
-          Write-Host "`n=== Checking architecture (MUST be x86_64) ==="
+          Write-Host "`n=== Compiler architecture ==="
           $arch = g++ -dumpmachine 2>&1
           Write-Host "Architecture: $arch"
-          
           if ($arch -notlike "*x86_64*") {
-            Write-Error "❌ FATAL: Not a 64-bit compiler! Aborting build."
+            Write-Error "❌ Not 64-bit compiler!"
             exit 1
           }
-          Write-Host "✅ OK: 64-bit toolchain confirmed"
+          Write-Host "✅ 64-bit confirmed"
 
       - name: 🛠️ Build project (Release)
         run: |
@@ -48,15 +44,47 @@ jobs:
           mingw32-make -j4
         shell: cmd
 
-      - name: 📦 Deploy Qt dependencies
+      - name: 🔍 Debug: Locate executable
         run: |
-          windeployqt --release release\ScreenshotTool.exe
-        working-directory: release
+          echo === Searching for .exe files ===
+          dir /s /b *.exe
+          echo.
+          echo === Current directory structure ===
+          dir
         shell: cmd
+
+      - name: 📦 Deploy Qt dependencies (auto-detect .exe)
+        shell: pwsh
+        run: |
+          # Ищем .exe в текущей директории и подпапках
+          $exePath = Get-ChildItem -Path . -Filter "*.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          
+          if (-not $exePath) {
+            Write-Error "❌ No .exe file found after build!"
+            exit 1
+          }
+          
+          Write-Host "✅ Found executable: $exePath"
+          Write-Host "Running windeployqt..."
+          
+          windeployqt --release "$exePath"
+          
+          # Копируем .exe в отдельную папку для архивации
+          $deployDir = "deploy"
+          New-Item -ItemType Directory -Path $deployDir -Force | Out-Null
+          Copy-Item -Path "$exePath" -Destination $deployDir -Force
+          
+          # Копируем все зависимости (dll, plugins)
+          $exeDir = Split-Path $exePath -Parent
+          Copy-Item -Path "$exeDir\*.dll" -Destination $deployDir -ErrorAction SilentlyContinue
+          Copy-Item -Path "$exeDir\platforms" -Destination $deployDir -Recurse -ErrorAction SilentlyContinue
+          Copy-Item -Path "$exeDir\imageformats" -Destination $deployDir -Recurse -ErrorAction SilentlyContinue
+          
+          Write-Host "✅ Deployment completed in $deployDir"
 
       - name: 💾 Package for Windows
         run: |
-          Compress-Archive -Path release\* -DestinationPath ScreenshotTool-win64-qt5.12.12.zip -Force
+          Compress-Archive -Path deploy\* -DestinationPath ScreenshotTool-win64-qt5.12.12.zip -Force
         shell: pwsh
 
       - name: 🚀 Upload artifact
@@ -73,6 +101,6 @@ jobs:
           echo ========================================
           echo  ✅ BUILD SUCCESSFUL!
           echo  📦 Artifact: ScreenshotTool-win64-qt5.12.12.zip
-          echo  💻 Works on Windows 7+ (64-bit only)
+          echo  💻 Works on Windows 7+ (64-bit)
           echo ========================================
         shell: cmd

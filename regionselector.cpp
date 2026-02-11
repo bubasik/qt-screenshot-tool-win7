@@ -138,3 +138,26 @@ QRect RegionSelector::normalizedRect() const
     int y2 = qMax(startPos.y(), currentPos.y());
     return QRect(x1, y1, x2 - x1, y2 - y1);
 }
+
+void RegionSelector::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Escape) {
+        close();
+        emit selectionCancelled();
+        event->accept();
+    } else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+        if (isSelecting) {
+            QRect finalRect = normalizedRect();
+            if (finalRect.width() >= 10 && finalRect.height() >= 10) {
+                capturedImage = fullScreenPixmap.copy(finalRect);
+                emit selectionFinished(capturedImage);
+            } else {
+                emit selectionCancelled();
+            }
+            close();
+        }
+        event->accept();
+    } else {
+        QWidget::keyPressEvent(event);
+    }
+}

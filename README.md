@@ -17,3 +17,14 @@
 
 
 > ⚠️ Для работы на чистом Windows 7 установите обновления: KB2533623, KB2999226
+
+
+**Сборка**
+qmake ScreenshotTool.pro
+mingw32-make  # или nmake для MSVC
+
+**Деплой для Win7:**
+windeployqt --release ScreenshotTool.exe
+
+
+

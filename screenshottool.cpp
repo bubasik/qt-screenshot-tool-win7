@@ -29,7 +29,12 @@ ScreenshotTool::~ScreenshotTool()
 {
     qDeleteAll(shortcuts);
     shortcuts.clear();
-    delete regionSelector;
+    // Удаляем regionSelector, если он существует
+    if (regionSelector) {
+        disconnect(regionSelector, &QObject::destroyed, nullptr, nullptr);
+        delete regionSelector;
+        regionSelector = nullptr;
+    }
 }
 
 void ScreenshotTool::setupUI()
@@ -180,6 +185,8 @@ void ScreenshotTool::onRegionScreenshot()
                 this, &ScreenshotTool::onRegionSelected);
         connect(regionSelector, &RegionSelector::selectionCancelled,
                 this, &ScreenshotTool::onRegionCancelled);
+        connect(regionSelector, &QObject::destroyed,
+                [this]() { regionSelector = nullptr; });
     }
     statusBar()->showMessage("Выделите область мышью • Esc — отмена");
     regionSelector->startSelection();

@@ -1,5 +1,6 @@
 # 📸 Qt Скриншотер с поддержкой Windows 7
 
+
 ![Windows 7 Compatible](https://img.shields.io/badge/Windows%207-SP1%2B-brightgreen?logo=windows)
 ![Qt 5.12.12](https://img.shields.io/badge/Qt-5.12.12-blue?logo=qt)
 ![MinGW 7.3](https://img.shields.io/badge/MinGW-7.3-orange?logo=gnu)

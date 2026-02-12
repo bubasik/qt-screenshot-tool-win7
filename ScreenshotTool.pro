@@ -12,11 +12,13 @@ DESTDIR = release
 SOURCES += \
     main.cpp \
     screenshottool.cpp \
-    regionselector.cpp
+    regionselector.cpp \
+    imageeditor.cpp
 
 HEADERS += \
     screenshottool.h \
     regionselector.h \
+    imageeditor.h \
     themes.h
 
 # Для 64-битной сборки

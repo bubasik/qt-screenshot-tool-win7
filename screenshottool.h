@@ -7,9 +7,11 @@
 #include <QPixmap>
 #include <QTimer>
 #include <QShortcut>
+#include <QStackedWidget>
 
 class RegionSelector;
 class QPushButton;
+class ImageEditor;
 
 class ScreenshotTool : public QMainWindow
 {
@@ -26,7 +28,9 @@ private slots:
     void onRegionCancelled();
     void onSave();
     void onCopy();
+    void onEdit();
     void onThemeChanged(int index);
+    void onImageEdited(const QPixmap &editedImage);
 
 private:
     void setupUI();
@@ -39,8 +43,11 @@ private:
     QComboBox *themeComboBox;
     QPushButton *regionButton;
     QPushButton *fullButton;
+    QPushButton *editButton;
     QPixmap currentScreenshot;
     RegionSelector *regionSelector;
+    ImageEditor *imageEditor;
+    QStackedWidget *stackedWidget;
     QList<QShortcut*> shortcuts;
 };
 

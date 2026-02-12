@@ -1,5 +1,6 @@
 #include "screenshottool.h"
 #include "regionselector.h"
+#include "imageeditor.h"
 #include "themes.h"
 #include <QToolBar>
 #include <QPushButton>
@@ -13,10 +14,12 @@
 #include <QDateTime>
 #include <QShortcut>
 #include <QFile>  // Для определения размера файла
+#include <QStackedWidget>
 
 ScreenshotTool::ScreenshotTool(QWidget *parent)
     : QMainWindow(parent),
-      regionSelector(nullptr)
+      regionSelector(nullptr),
+      imageEditor(nullptr)
 {
     setupUI();
     setupShortcuts();
@@ -35,13 +38,22 @@ ScreenshotTool::~ScreenshotTool()
         delete regionSelector;
         regionSelector = nullptr;
     }
+    // Удаляем imageEditor, если он существует
+    if (imageEditor) {
+        delete imageEditor;
+        imageEditor = nullptr;
+    }
 }
 
 void ScreenshotTool::setupUI()
 {
-    QWidget *centralWidget = new QWidget(this);
-    QVBoxLayout *layout = new QVBoxLayout(centralWidget);
+    // Create stacked widget to switch between preview and editor
+    stackedWidget = new QStackedWidget(this);
     
+    // Create preview widget
+    QWidget *previewWidget = new QWidget(this);
+    QVBoxLayout *previewLayout = new QVBoxLayout(previewWidget);
+
     previewLabel = new QLabel("Сделайте скриншот", this);
     previewLabel->setObjectName("preview");
     previewLabel->setAlignment(Qt::AlignCenter);
@@ -58,10 +70,20 @@ void ScreenshotTool::setupUI()
                           "Ctrl+C — копировать"
                           "</span>"
                           "</div>");
-    layout->addWidget(previewLabel);
+    previewLayout->addWidget(previewLabel);
+
+    previewWidget->setLayout(previewLayout);
     
-    centralWidget->setLayout(layout);
-    setCentralWidget(centralWidget);
+    // Create image editor
+    imageEditor = new ImageEditor(this);
+    connect(imageEditor, &ImageEditor::imageEdited, this, &ScreenshotTool::onImageEdited);
+    
+    // Add widgets to stacked widget
+    stackedWidget->addWidget(previewWidget);
+    stackedWidget->addWidget(imageEditor);
+    stackedWidget->setCurrentIndex(0); // Show preview initially
+    
+    setCentralWidget(stackedWidget);
 
     QToolBar *toolBar = new QToolBar("Инструменты", this);
     toolBar->setMovable(false);
@@ -78,6 +100,13 @@ void ScreenshotTool::setupUI()
     regionButton->setToolTip("Ctrl+Shift+A");
     connect(regionButton, &QPushButton::clicked, this, &ScreenshotTool::onRegionScreenshot);
     toolBar->addWidget(regionButton);
+
+    // Add edit button
+    editButton = new QPushButton("✏️ Редактировать", this);
+    editButton->setToolTip("Ctrl+E");
+    editButton->setEnabled(false); // Disable until we have a screenshot
+    connect(editButton, &QPushButton::clicked, this, &ScreenshotTool::onEdit);
+    toolBar->addWidget(editButton);
 
     toolBar->addSeparator();
 
@@ -117,6 +146,11 @@ void ScreenshotTool::setupShortcuts()
     QShortcut *shortcutRegion = new QShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_A), this);
     connect(shortcutRegion, &QShortcut::activated, this, &ScreenshotTool::onRegionScreenshot);
     shortcuts.append(shortcutRegion);
+
+    // Ctrl+E — редактировать
+    QShortcut *shortcutEdit = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_E), this);
+    connect(shortcutEdit, &QShortcut::activated, this, &ScreenshotTool::onEdit);
+    shortcuts.append(shortcutEdit);
 
     // Ctrl+S — сохранить
     QShortcut *shortcutSave = new QShortcut(QKeySequence(Qt::CTRL + Qt::Key_S), this);
@@ -168,6 +202,7 @@ void ScreenshotTool::onFullScreenshot()
     currentScreenshot = captureFullScreen();
     if (!currentScreenshot.isNull()) {
         setPreviewPixmap(currentScreenshot);
+        editButton->setEnabled(true); // Enable edit button
         statusBar()->showMessage(QString("Скриншот всего экрана: %1x%2 • Ctrl+S — сохранить")
             .arg(currentScreenshot.width())
             .arg(currentScreenshot.height()));
@@ -196,6 +231,7 @@ void ScreenshotTool::onRegionSelected(const QPixmap &pixmap)
 {
     currentScreenshot = pixmap;
     setPreviewPixmap(currentScreenshot);
+    editButton->setEnabled(true); // Enable edit button
     statusBar()->showMessage(QString("Выделенная область: %1x%2 • Ctrl+S — сохранить")
         .arg(currentScreenshot.width())
         .arg(currentScreenshot.height()));
@@ -204,6 +240,37 @@ void ScreenshotTool::onRegionSelected(const QPixmap &pixmap)
 void ScreenshotTool::onRegionCancelled()
 {
     statusBar()->showMessage("Выделение отменено • Попробуйте снова: Ctrl+Shift+A");
+}
+
+void ScreenshotTool::onEdit()
+{
+    if (currentScreenshot.isNull()) {
+        QMessageBox::information(this, "Редактирование", "Нет изображения для редактирования");
+        return;
+    }
+    
+    // Set the image in the editor
+    imageEditor->setImage(currentScreenshot);
+    
+    // Switch to the editor view
+    stackedWidget->setCurrentIndex(1);
+    
+    // Update status bar
+    statusBar()->showMessage("Режим редактирования • Используйте инструменты для изменения изображения");
+}
+
+void ScreenshotTool::onImageEdited(const QPixmap &editedImage)
+{
+    // Update the current screenshot with the edited version
+    currentScreenshot = editedImage;
+    
+    // Switch back to preview view
+    stackedWidget->setCurrentIndex(0);
+    
+    // Update the preview
+    setPreviewPixmap(currentScreenshot);
+    
+    statusBar()->showMessage("Изображение отредактировано • Ctrl+S — сохранить");
 }
 
 void ScreenshotTool::setPreviewPixmap(const QPixmap &pixmap)
